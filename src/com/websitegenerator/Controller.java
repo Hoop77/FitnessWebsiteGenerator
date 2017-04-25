@@ -246,7 +246,9 @@ public class Controller
             stripper.setStartPage( page );
             stripper.setEndPage( page );
             String pageText = stripper.getText( doc );
-            sections.add( Section.fromPageText( pageText ) );
+            Section section = Section.fromPageText( pageText );
+            if( section != null )
+                sections.add( section );
         }
 
         return sections;

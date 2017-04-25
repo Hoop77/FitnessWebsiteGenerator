@@ -29,10 +29,9 @@ public class Section
     public static Section fromPageText( String pageText )
     {
         Scanner scanner = new Scanner( pageText );
-        if( !scanner.hasNextLine() )
-            return new Section( "", "" );
-
-        String headline = scanner.nextLine();
+        String headline = scanForHeadline( scanner );
+        if( headline == null )
+            return null;
 
         String text = "";
         while( scanner.hasNextLine() )
@@ -41,6 +40,18 @@ public class Section
         scanner.close();
 
         return new Section( headline, text );
+    }
+
+    private static String scanForHeadline( Scanner scanner )
+    {
+        while( scanner.hasNextLine() )
+        {
+            String line = scanner.nextLine().trim();
+            if( !line.equals( "" ) )
+                return line;
+        }
+
+        return null;
     }
 
     public String toHtml( SectionStyleProperties properties )
