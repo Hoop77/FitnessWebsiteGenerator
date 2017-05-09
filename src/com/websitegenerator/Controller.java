@@ -31,11 +31,13 @@ public class Controller
     private Stage stage;
 
     private File übungTemplateFile = null;
+    private File trainingshinweisTemplateFile = null;
     private File krankheitsbildTemplateFile = null;
     private File datenXmlFile = null;
     private File websiteDirectory = null;
 
     private List<Übung> übungen = new ArrayList<>();
+    private List<Trainingshinweis> trainingshinweise = new ArrayList<>();
 
     public Controller( Stage stage )
     {
@@ -50,10 +52,14 @@ public class Controller
         websiteDirectory = directoryChooser.showDialog( stage );
 
         übungTemplateFile = new File( websiteDirectory.getPath() + "/templates/praxis_übung_template.html" );
+        trainingshinweisTemplateFile = new File( websiteDirectory.getPath() + "/templates/theorie_trainingshinweis_template.html" );
         krankheitsbildTemplateFile = new File( websiteDirectory.getPath() + "/templates/theorie_krankheitsbild_template.html" );
         datenXmlFile = new File( websiteDirectory.getPath() + "/Daten.xml" );
 
-        if( übungTemplateFile.exists() && krankheitsbildTemplateFile.exists() && datenXmlFile.exists() )
+        if( übungTemplateFile.exists() &&
+            trainingshinweisTemplateFile.exists() &&
+            krankheitsbildTemplateFile.exists() &&
+            datenXmlFile.exists() )
         {
             btnGenerate.setDisable( false );
         }
@@ -69,11 +75,14 @@ public class Controller
     @FXML
     public void actionGenerate( ActionEvent actionEvent )
     {
+        übungen = new ArrayList<>();
+        trainingshinweise = new ArrayList<>();
+
         generateDataJs();
-        deleteOldÜbungenSitesDirectory();
-        deleteOldKrankheitsbilderSitesDirectory();
-        createÜbungenSitesDirectory();
-        createKrankheitsbilderSitesDirectory();
+
+        emptyDirectory( websiteDirectory.getPath() + "/Übungen/Seiten/" );
+        emptyDirectory( websiteDirectory.getPath() + "/Krankheitsbilder/Seiten/" );
+        emptyDirectory( websiteDirectory.getPath() + "/Trainingshinweise/Seiten/" );
 
         if( !parseXmlData() )
         {
@@ -82,6 +91,7 @@ public class Controller
         }
 
         generateÜbungenSites();
+        generateTrainingshinweiseSites();
 
         if( !generateKrankheitsbilderSites() )
         {
@@ -123,24 +133,10 @@ public class Controller
         }
     }
 
-    private void deleteOldÜbungenSitesDirectory()
+    private void emptyDirectory( String dir )
     {
-        deleteDirectory( new File( websiteDirectory.getPath() + "/Übungen/Seiten/" ) );
-    }
-
-    private void deleteOldKrankheitsbilderSitesDirectory()
-    {
-        deleteDirectory( new File( websiteDirectory.getPath() + "/Krankheitsbilder/Seiten/" ) );
-    }
-
-    private void createÜbungenSitesDirectory()
-    {
-        new File( websiteDirectory.getPath() + "/Übungen/Seiten/" ).mkdir();
-    }
-
-    private void createKrankheitsbilderSitesDirectory()
-    {
-        new File( websiteDirectory.getPath() + "/Krankheitsbilder/Seiten/" ).mkdir();
+        deleteDirectory( new File( dir ) );
+        new File( dir ).mkdir();
     }
 
     private boolean parseXmlData()
@@ -156,16 +152,11 @@ public class Controller
             Element root = doc.getDocumentElement();
             root.normalize();
 
-            Element elÜbungen = getFirstElementByTagName( root, "Übungen" );
-            if( elÜbungen == null )
+            if( !parseÜbungen( root ) )
                 return false;
 
-            NodeList elÜbungList = elÜbungen.getElementsByTagName( "Übung" );
-            for( int i = 0; i < elÜbungList.getLength(); i++ )
-            {
-                if( !parseÜbung( ( Element ) elÜbungList.item( i ) ) )
-                    return false;
-            }
+            if( !parseTrainingshinweise( root ) )
+                return false;
         }
         catch( ParserConfigurationException e )
         {
@@ -181,6 +172,78 @@ public class Controller
         }
 
         return true;
+    }
+
+    private boolean parseÜbungen( Element root )
+    {
+        Element elPraxis = getFirstElementByTagName( root, "Praxis" );
+        if( elPraxis == null )
+            return false;
+
+        Element elÜbungen = getFirstElementByTagName( elPraxis, "Übungen" );
+        if( elÜbungen == null )
+            return false;
+
+        NodeList elÜbungList = elÜbungen.getElementsByTagName( "Übung" );
+        for( int i = 0; i < elÜbungList.getLength(); i++ )
+        {
+            if( !parseÜbung( (Element) elÜbungList.item( i ) ) )
+                return false;
+        }
+
+        return true;
+    }
+
+    private boolean parseTrainingshinweise( Element root )
+    {
+        Element elTheorie = getFirstElementByTagName( root, "Theorie" );
+        if( elTheorie == null )
+            return false;
+
+        Element elTrainingshinweise = getFirstElementByTagName( elTheorie, "Trainingshinweise" );
+        if( elTrainingshinweise == null )
+            return false;
+
+        NodeList elTrainingshinweisList = elTrainingshinweise.getElementsByTagName( "Trainingshinweis" );
+        for( int i = 0; i < elTrainingshinweisList.getLength(); i++ )
+        {
+            if( !parseTrainingshinweis( (Element) elTrainingshinweisList.item( i ) ) )
+                return false;
+        }
+
+        return true;
+    }
+
+    private boolean parseTrainingshinweis( Element elTrainingshinweis )
+    {
+        if( !elTrainingshinweis.hasAttribute( "Name" ) )
+            return false;
+
+        String name = elTrainingshinweis.getAttribute( "Name" );
+        List<Abschnitt> abschnitte = new ArrayList<>();
+
+        NodeList elAbschnittList = elTrainingshinweis.getElementsByTagName( "Abschnitt" );
+        for( int i = 0; i < elAbschnittList.getLength(); i++ )
+        {
+            Abschnitt abschnitt = parseTrainingshinweisAbschnitt( (Element) elAbschnittList.item( i ) );
+            if( abschnitt == null )
+                return false;
+            abschnitte.add( abschnitt );
+        }
+
+        trainingshinweise.add( new Trainingshinweis( name, abschnitte ) );
+        return true;
+    }
+
+    private Abschnitt parseTrainingshinweisAbschnitt( Element elAbschnitt )
+    {
+        if( !elAbschnitt.hasAttribute( "Name" ) )
+            return null;
+
+        String name = elAbschnitt.getAttribute( "Name" );
+        String text = elAbschnitt.getTextContent();
+
+        return new Abschnitt( name, text );
     }
 
     private boolean generateKrankheitsbilderSites()
@@ -210,6 +273,47 @@ public class Controller
         }
 
         return true;
+    }
+
+    private void generateTrainingshinweiseSites()
+    {
+        for( Trainingshinweis trainingshinweis : trainingshinweise )
+        {
+            generateTrainingshinweisSite( trainingshinweis );
+        }
+    }
+
+    private void generateTrainingshinweisSite( Trainingshinweis trainingshinweis)
+    {
+        File trainingshinweisSiteFile = new File(
+            websiteDirectory.getPath() + "/Trainingshinweise/Seiten/" + trainingshinweis.getName() + ".html" );
+
+        try
+        {
+            BufferedReader templateReader = new BufferedReader( new FileReader( trainingshinweisTemplateFile ) );
+            Writer siteWriter = new BufferedWriter( new OutputStreamWriter(
+                new FileOutputStream( trainingshinweisSiteFile ), "UTF-8" ) );
+
+            String line;
+            while( ( line = templateReader.readLine() ) != null )
+            {
+                siteWriter.write( replaceTrainingshinweisTemplate( line, trainingshinweis ) + "\n" );
+            }
+
+            templateReader.close();
+            siteWriter.close();
+        }
+        catch( IOException e )
+        {
+            showErrorMessage( "Fehler beim Lesen oder Schreiben!" );
+        }
+    }
+
+    private String replaceTrainingshinweisTemplate( String line, Trainingshinweis trainingshinweis )
+    {
+        return line
+            .replace( "$$Name$$", trainingshinweis.getName() )
+            .replace( "$$Abschnitte$$", Abschnitt.abschnitteToHtml( trainingshinweis.getAbschnitte() ) );
     }
 
     private boolean isPdf( File file )
